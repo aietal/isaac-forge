@@ -41,7 +41,7 @@ const mainAgent = new Agent({
 });
 
 // Initialize the framework
-const swarm = new Swarm(process.env.OPENAI_API_KEY);
+const swarm = new Swarm(process.env.OPENAI_API_KEY || '');
 
 // Deploy and run
 async function main() {

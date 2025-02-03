@@ -2,7 +2,7 @@
   "name": "isaac-forge",
   "private": true,
   "version": "0.0.1",
-  "description": "A high-performance TypeScript framework for autonomous agent orchestration",
+  "description": "The first infrastructure for autonomous scientific agents, powered by $ISAACX",
   "type": "module",
   "author": "aietal",
   "scripts": {
@@ -12,14 +12,19 @@
   "keywords": [
     "ai",
     "autonomous-agents",
-    "multi-agent-systems",
-    "agent-orchestration",
+    "desci",
+    "scientific-agents",
+    "isaacx",
+    "decentralized-science",
+    "research-automation",
+    "cybernetics",
     "typescript"
   ],
   "license": "Apache-2.0",
   "dependencies": {
     "es-toolkit": "^1.25.1",
-    "openai": "^4.67.3"
+    "openai": "^4.67.3",
+    "ethers": "^6.13.5"
   },
   "devDependencies": {
     "@types/node": "^16.18.113",

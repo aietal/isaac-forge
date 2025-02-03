@@ -12,8 +12,18 @@ import {
 } from './types';
 import { ChatCompletion, ChatCompletionMessageToolCall, ChatCompletionChunk } from 'openai/resources';
 import { Stream } from 'openai/streaming';
+import { IsaacXToken, validateAndChargeCompute } from './utils/token';
 
 const CTX_VARS_NAME = 'context_variables';
+
+interface SwarmConfig {
+    apiKey?: string;
+    isaacx?: {
+        contractAddress: string;
+        providerUrl: string;
+        privateKey: string;
+    };
+}
 
 interface SwarmRunOptions {
     agent: Agent;
@@ -25,20 +35,35 @@ interface SwarmRunOptions {
     max_turns?: number;
     execute_tools?: boolean;
     availableAgents?: Agent[];
+    // Token-related options
+    computeUnits?: number;
+    userAddress?: string;
 }
 
 export class Swarm {
     private client: OpenAI;
+    private isaacxToken?: IsaacXToken;
 
-    constructor(apiKey?: string) {
-        if (!apiKey && !process.env.OPENAI_API_KEY) {
-            throw new Error(
-                'OpenAI API key not found. Please provide it as an argument to the Swarm constructor ' +
-                'or set it as the OPENAI_API_KEY environment variable.'
-            );
+    constructor(config: SwarmConfig | string) {
+        // Handle legacy constructor
+        if (typeof config === 'string') {
+            this.client = new OpenAI({ apiKey: config || process.env.OPENAI_API_KEY });
+            return;
         }
 
-        this.client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
+        // Initialize OpenAI client
+        this.client = new OpenAI({ 
+            apiKey: config.apiKey || process.env.OPENAI_API_KEY 
+        });
+
+        // Initialize ISAACX token if config provided
+        if (config.isaacx) {
+            this.isaacxToken = new IsaacXToken(
+                config.isaacx.contractAddress,
+                config.isaacx.providerUrl,
+                config.isaacx.privateKey
+            );
+        }
     }
 
     private shouldSwitchAgent(message: string, currentAgent: Agent, availableAgents: Agent[]): Agent | null {
@@ -236,166 +261,6 @@ export class Swarm {
         return partialResponse;
     }
 
-    // async *runAndStream(options: SwarmRunOptions): AsyncIterable<any> {
-    //     const {
-    //         agent,
-    //         messages,
-    //         context_variables = {},
-    //         model_override,
-    //         debug = false,
-    //         max_turns = Infinity,
-    //         execute_tools = true,
-    //     } = options;
-
-    //     let active_agent = agent;
-    //     const ctx_vars = cloneDeep(context_variables);
-    //     const history = cloneDeep(messages);
-    //     const init_len = history.length;
-
-    //     while ((history.length - init_len) < max_turns) {
-    //         const message: any = {
-    //             content: '',
-    //             sender: agent.name,
-    //             role: 'assistant',
-    //             function_call: null,
-    //             tool_calls: {},
-    //         };
-
-    //         // Get completion with current history and agent
-    //         const completion = await this.getChatCompletion(
-    //             active_agent,
-    //             history,
-    //             ctx_vars,
-    //             model_override,
-    //             true,
-    //             debug
-    //         );
-
-    //         yield { delim: 'start' };
-    //         for await (const chunk of completion) {
-    //             logDebugMessage(debug, 'Received chunk:', JSON.stringify(chunk));
-    //             const delta = chunk.choices[0].delta;
-    //             if (chunk.choices[0].delta.role === 'assistant') {
-    //                 // @ts-ignore
-    //                 delta.sender = active_agent.name;
-    //             }
-    //             yield delta;
-    //             delete delta.role;
-    //             // @ts-ignore
-    //             delete delta.sender;
-    //             mergeResponseChunk(message, delta);
-    //         }
-    //         yield { delim: 'end' };
-
-    //         message.tool_calls = Object.values(message.tool_calls);
-    //         if (message.tool_calls.length === 0) {
-    //             message.tool_calls = null;
-    //         }
-    //         logDebugMessage(debug, 'Received completion:', JSON.stringify(message));
-    //         history.push(message);
-
-    //         if (!message.tool_calls || !execute_tools) {
-    //             logDebugMessage(debug, 'Ending turn.');
-    //             break;
-    //         }
-
-    //         // Convert tool_calls to objects
-    //         const tool_calls: ChatCompletionMessageToolCall[] = message.tool_calls.map((tc: any) => {
-    //             const func = new ToolFunction({
-    //                 arguments: tc.function.arguments,
-    //                 name: tc.function.name,
-    //             });
-    //             return {
-    //                 id: tc.id,
-    //                 function: func,
-    //                 type: tc.type,
-    //             };
-    //         });
-
-    //         // Handle function calls, updating context_variables and switching agents
-    //         const partial_response = this.handleToolCalls(tool_calls, active_agent.functions, ctx_vars, debug);
-    //         history.push(...partial_response.messages);
-    //         Object.assign(ctx_vars, partial_response.context_variables);
-    //         if (partial_response.agent) {
-    //             active_agent = partial_response.agent;
-    //         }
-    //     }
-
-    //     yield {
-    //         response: new Response({
-    //             messages: history.slice(init_len),
-    //             agent: active_agent,
-    //             context_variables: ctx_vars,
-    //         }),
-    //     };
-    // }
-    
-    // async run(
-    //     options: SwarmRunOptions
-    // ): Promise<Response | AsyncIterable<any>> {
-    //     const {
-    //         agent,
-    //         messages,
-    //         context_variables = {},
-    //         model_override,
-    //         stream = false,
-    //         debug = false,
-    //         max_turns = Infinity,
-    //         execute_tools = true,
-    //     } = options;
-
-    //     if (stream) {
-    //         return this.runAndStream({
-    //             agent,
-    //             messages,
-    //             context_variables,
-    //             model_override,
-    //             debug,
-    //             max_turns,
-    //             execute_tools,
-    //         });
-    //     }
-
-    //     let active_agent = agent;
-    //     const ctx_vars = cloneDeep(context_variables);
-    //     const history = cloneDeep(messages);
-    //     const init_len = history.length;
-
-    //     while ((history.length - init_len) < max_turns && active_agent) {
-    //         // Get completion with current history and agent
-    //         const completion: ChatCompletion = await this.getChatCompletion(
-    //             active_agent,
-    //             history,
-    //             ctx_vars,
-    //             model_override,
-    //             false,
-    //             debug
-    //         );
-
-    //         const messageData = completion.choices[0].message;
-    //         logDebugMessage(debug, 'Received completion:', JSON.stringify(messageData));
-    //         const message: any = { ...messageData, sender: active_agent.name };
-    //         history.push(message); // Adjust as needed
-
-    //         if (!message.tool_calls || !execute_tools) {
-    //             logDebugMessage(debug, 'Ending turn.');
-    //             break;
-    //         }
-
-    //         // Handle function calls, updating context_variables and switching agents
-    //         const partial_response = this.handleToolCalls(
-    //             message.tool_calls,
-    //             active_agent.functions,
-    //             ctx_vars,
-    //             debug
-    //         );
-    //         history.push(...partial_response.messages);
-    //         Object.assign(ctx_vars, partial_response.context_variables);
-    //         if (partial_response.agent) {
-    //             active_agent = partial_response.agent;
-    //         }
-    //     }
-
     async *runAndStream(options: SwarmRunOptions): AsyncIterable<any> {
         const {
             agent,
@@ -502,6 +367,19 @@ export class Swarm {
     }
     
     async run(options: SwarmRunOptions): Promise<Response> {
+        // Validate and charge tokens if compute units specified
+        if (options.computeUnits && options.userAddress && this.isaacxToken) {
+            const charged = await validateAndChargeCompute(
+                this.isaacxToken,
+                options.userAddress,
+                options.computeUnits
+            );
+            
+            if (!charged) {
+                throw new Error('Failed to charge $ISAACX tokens for computation');
+            }
+        }
+
         const {
             agent,
             messages,
@@ -569,11 +447,4 @@ export class Swarm {
             context_variables: ctx_vars,
         });
     }
-
-        // return new Response({
-        //     messages: history.slice(init_len),
-        //     agent: active_agent,
-        //     context_variables: ctx_vars,
-        // });
-    // }
 }

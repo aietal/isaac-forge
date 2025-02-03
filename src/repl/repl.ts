@@ -22,7 +22,7 @@ export async function runCLI(
 
   const initializeSwarm = async (): Promise<void> => {
     try {
-      swarm = new Swarm(apiKey);
+      swarm = new Swarm(apiKey || process.env.OPENAI_API_KEY || '');
     } catch (error: unknown) {
       console.error(
         "Failed to initialize Isaac Forge:",
