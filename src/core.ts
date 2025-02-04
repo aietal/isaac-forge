@@ -19,9 +19,8 @@ const CTX_VARS_NAME = 'context_variables';
 interface SwarmConfig {
     apiKey?: string;
     isaacx?: {
-        contractAddress: string;
-        providerUrl: string;
-        privateKey: string;
+        rpcUrl: string;
+        privateKey: Uint8Array;
     };
 }
 
@@ -59,8 +58,7 @@ export class Swarm {
         // Initialize ISAACX token if config provided
         if (config.isaacx) {
             this.isaacxToken = new IsaacXToken(
-                config.isaacx.contractAddress,
-                config.isaacx.providerUrl,
+                config.isaacx.rpcUrl,
                 config.isaacx.privateKey
             );
         }
